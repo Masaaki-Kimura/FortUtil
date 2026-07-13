@@ -2216,6 +2216,7 @@ subroutine cerzo ( nt, zo )
     py = 0.5e+00_real64 * pu + 0.5e+00_real64 * log ( pv ) / pu
     z = cmplx ( px, py, kind = real64 )
     it = 0
+    w = abs ( z )
 
     do
 
@@ -3636,8 +3637,13 @@ pure subroutine chgul ( a, b, x, hu, id )
     do k = 1, 25
       r = - r * ( a + k - 1.0e+00_real64 ) * ( a - b + k ) / ( k * x )
       ra = abs ( r )
-      if ( ( 5 < k .and. r0 <= ra ) .or. ra < 1.0e-15_real64 ) then
+      if ( ra < 1.0e-15_real64 ) then
         exit
+      end if
+      if ( 5 < k ) then
+        if ( r0 <= ra ) then
+          exit
+        end if
       end if
       r0 = ra
       hu = hu + r
@@ -4717,8 +4723,10 @@ subroutine cikva ( v, z, vm, cbi, cdi, cbk, cdk )
         cr2 = 0.25e+00_real64 * cr2 * z2 / ( k * ( k + v0 ) )
         csu = csu + ca2 * cr1 - ca1 * cr2
         ws = abs ( csu )
-        if ( 10 <= k .and. abs ( ws - ws0 ) / ws < 1.0e-15_real64 ) then
-          exit
+        if ( 10 <= k ) then
+          if ( abs ( ws - ws0 ) / ws < 1.0e-15_real64 ) then
+            exit
+          end if
         end if
         ws0 = ws
       end do
@@ -5969,6 +5977,7 @@ subroutine cjyna ( n, z, nm, cbj, cdj, cby, cdy )
 
   if ( 4 < lb  .and. imag ( z ) /= 0.0e+00_real64 ) then
 
+    lb0 = -1
     do
 
       if ( lb == lb0 ) then
@@ -6662,6 +6671,7 @@ subroutine cjyva ( v, z, vm, cbj, cdj, cby, cdy )
 
     if ( 4 < lb .and. imag ( z ) /= 0.0e+00_real64 ) then
 
+      lb0 = -1
       do
 
         if ( lb == lb0 ) then
@@ -9035,8 +9045,10 @@ pure subroutine cva1 ( kd, m, q, cv )
         end if
       end do
 
-      if ( k /= 1 .and. h(k) < h(k-1) ) then
-        h(k) = h(k-1)
+      if ( k /= 1 ) then
+        if ( h(k) < h(k-1) ) then
+          h(k) = h(k-1)
+        end if
       end if
 
       do
@@ -9913,6 +9925,7 @@ subroutine cyzo ( nt, kf, kc, zo, zv )
     end if
 
     it = 0
+    w = abs ( z )
 
     do
 
@@ -10938,6 +10951,7 @@ pure subroutine enxb ( n, x, en )
       end do
       ens = rp * ( - log ( x ) + ps )
       s = 0.0e+00_real64
+      s0 = s
       do m = 0, 20
         if ( m /= l - 1 ) then
           r = 1.0e+00_real64
@@ -11774,6 +11788,7 @@ subroutine fcszo ( kf, nt, zo )
     end if
 
     it = 0
+    w = abs ( z )
 
     do
 
@@ -13524,6 +13539,7 @@ subroutine hygfz ( a, b, c, z, zhf )
       zr = zc1
       rk1 = 1.0e+00_real64
       sj1 = 0.0e+00_real64
+      w0 = abs ( zf1 )
 
       do k = 1, 10000
         zr = zr / z
@@ -16661,6 +16677,7 @@ subroutine jdzo ( nt, n, m, p, zo )
 
       if ( i == 1 .and. j == 1 ) then
 
+        x = 0.0e+00_real64
         l1 = l1 + 1
         n1(l1) = i - 1
         m1(l1) = j
@@ -21824,8 +21841,10 @@ subroutine mtu12 ( kf, kc, m, q, x, f1r, d1r, f2r, d2r )
           * ( bj1(k-1) * bj2(k+1) - bj1(k+1) * bj2(k-1) )
       end if
 
-      if ( 5 <= k .and. abs ( f1r - w1 ) < abs ( f1r ) * eps ) then
-        exit
+      if ( 5 <= k ) then
+        if ( abs ( f1r - w1 ) < abs ( f1r ) * eps ) then
+          exit
+        end if
       end if
 
       w1 = f1r
@@ -21849,8 +21868,10 @@ subroutine mtu12 ( kf, kc, m, q, x, f1r, d1r, f2r, d2r )
           * ( c2 * ( bj1(k-1) * dj2(k+1) - bj1(k+1) * dj2(k-1) ) &
           - c1 * ( dj1(k-1) * bj2(k+1) - dj1(k+1) * bj2(k-1) ) )
       end if
-      if ( 5 <= k .and. abs ( d1r - w2 ) < abs ( d1r ) * eps ) then
-        exit
+      if ( 5 <= k ) then
+        if ( abs ( d1r - w2 ) < abs ( d1r ) * eps ) then
+          exit
+        end if
       end if
       w2 = d1r
     end do
@@ -21872,8 +21893,10 @@ subroutine mtu12 ( kf, kc, m, q, x, f1r, d1r, f2r, d2r )
         f2r = f2r + ( -1.0e+00_real64 ) ** ( ic + k ) * fg(k) &
           * ( bj1(k-1) * by2(k+1) - bj1(k+1) * by2(k-1) )
       end if
-      if ( 5 <= k .and. abs ( f2r - w1 ) < abs ( f2r ) * eps ) then
-        exit
+      if ( 5 <= k ) then
+        if ( abs ( f2r - w1 ) < abs ( f2r ) * eps ) then
+          exit
+        end if
       end if
       w1 = f2r
     end do
@@ -21897,8 +21920,10 @@ subroutine mtu12 ( kf, kc, m, q, x, f1r, d1r, f2r, d2r )
           - c1 * ( dj1(k-1) * by2(k+1) - dj1(k+1) * by2(k-1) ) )
       end if
 
-      if ( 5 <= k .and. abs ( d2r - w2 ) < abs ( d2r ) * eps ) then
-        exit
+      if ( 5 <= k ) then
+        if ( abs ( d2r - w2 ) < abs ( d2r ) * eps ) then
+          exit
+        end if
       end if
 
       w2 = d2r
@@ -24821,6 +24846,7 @@ pure subroutine sckb ( m, n, c, df, ck )
     end do
 
     sum = r * df(k+1)
+    sw = sum
     do i = k + 1, nm
       d1 = 2.0e+00_real64 * i + ip
       d2 = 2.0e+00_real64 * m + d1
@@ -25056,6 +25082,7 @@ pure subroutine sdmn ( m, n, c, cv, kd, df )
   end do
 
   su2 = 0.0e+00_real64
+  sw = su2
   do k = kb + 1, nm
     if ( k /= 1 ) then
       r1 = - r1 * ( k + m + ip - 1.5e+00_real64 ) / ( k - 1.0e+00_real64 )
@@ -25247,8 +25274,10 @@ pure subroutine segv ( m, n, c, kd, cv, eg )
         end if
       end do
 
-      if ( k /= 1 .and. h(k) < h(k-1) ) then
-        h(k) = h(k-1)
+      if ( k /= 1 ) then
+        if ( h(k) < h(k-1) ) then
+          h(k) = h(k-1)
+        end if
       end if
 
       do

@@ -9,7 +9,7 @@ module ModNuclConst
   ! Definition of mathematical and physical constants
   !%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !> Imaginary unit
-  complex(real64), parameter :: ZI=cmplx(0.0_real64,1.0_real64,kind=real64)
+  complex(real64), parameter :: I_IMAG=cmplx(0.0_real64,1.0_real64,kind=real64)
 
   !> Value of PI
   real(real64), parameter :: PI = acos(-1.0_real64)

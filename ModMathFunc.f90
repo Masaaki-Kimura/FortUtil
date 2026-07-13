@@ -3,7 +3,7 @@
 !> @author Masaaki Kimura
 module ModMathFunc
   use iso_fortran_env, only: real64, real128, error_unit
-  use ModNuclConst, only: PI, VDIM, VX, VY, VZ, SDIM, SU, SD, ZI
+  use ModNuclConst, only: PI, VDIM, VX, VY, VZ, SDIM, SU, SD, I_IMAG
   implicit none
   private
 
@@ -316,8 +316,8 @@ module ModMathFunc
       xpy = 1.0_real64 ! Y function does not depend on phi if r*sin(theta) == 0.0d0
       xmy = 1.0_real64
     else
-      xpy = (r(VX) + ZI*r(VY))/sqrt(r(VX)*r(VX) + r(VY)*r(VY)) ! exp(i\phi)
-      xmy = (r(VX) - ZI*r(VY))/sqrt(r(VX)*r(VX) + r(VY)*r(VY)) ! exp(-i\phi)
+      xpy = (r(VX) + I_IMAG*r(VY))/sqrt(r(VX)*r(VX) + r(VY)*r(VY)) ! exp(i\phi)
+      xmy = (r(VX) - I_IMAG*r(VY))/sqrt(r(VX)*r(VX) + r(VY)*r(VY)) ! exp(-i\phi)
     end if
     ! compute normalization factor
     cnst = sqrt((2*l+1)/(4*PI)*exp(dble(qgamln_(l-abs(m)+1.0_real128)-qgamln_(l+abs(m)+1.0_real128))))
@@ -365,8 +365,8 @@ module ModMathFunc
       xpy = 1.0_real64 ! Y function does not depend on phi if r*sin(theta) == 0.0d0
       xmy = 1.0_real64
     else
-      xpy = (z(VX) + ZI*z(VY))/sqrt(z(VX)*z(VX) + z(VY)*z(VY)) ! this corresponds to exp(i\phi)
-      xmy = (z(VX) - ZI*z(VY))/sqrt(z(VX)*z(VX) + z(VY)*z(VY)) ! this corresponds to exp(-i\phi)
+      xpy = (z(VX) + I_IMAG*z(VY))/sqrt(z(VX)*z(VX) + z(VY)*z(VY)) ! this corresponds to exp(i\phi)
+      xmy = (z(VX) - I_IMAG*z(VY))/sqrt(z(VX)*z(VX) + z(VY)*z(VY)) ! this corresponds to exp(-i\phi)
     end if
     ! compute normalization factor
     cnst = sqrt((2*l+1)/(4*PI)*exp(dble(qgamln_(l-abs(m)+1.0_real128)-qgamln_(l+abs(m)+1.0_real128))))
@@ -422,8 +422,8 @@ module ModMathFunc
     end do
 
     ! calculate exp(-im1*alp) and exp(-im2*gam)
-    ea = exp(-0.50_real64*m1*alp(:)*ZI)
-    eg = exp(-0.50_real64*m2*gam(:)*ZI)
+    ea = exp(-0.50_real64*m1*alp(:)*I_IMAG)
+    eg = exp(-0.50_real64*m2*gam(:)*I_IMAG)
 
     ! calculate coefficients of small d function
     A = (j-m1)/2

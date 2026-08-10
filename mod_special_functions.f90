@@ -8242,18 +8242,19 @@ subroutine csphik ( n, z, nm, csi, cdi, csk, cdk )
 
   real(real64) a0
   complex(real64) ccosh1
-  complex(real64), intent(inout) :: cdi(0:n)
-  complex(real64), intent(inout) :: cdk(0:n)
+  complex(real64), allocatable, intent(inout) :: cdi(:), cdk(:), csi(:), csk(:)
+  ! complex(real64), intent(inout) :: cdi(0:n)
+  ! complex(real64), intent(inout) :: cdk(0:n)
   complex(real64) cf
   complex(real64) cf0
   complex(real64) cf1
   complex(real64) ci
   complex(real64) cs
-  complex(real64), intent(inout) :: csi(0:n)
+  ! complex(real64), intent(inout) :: csi(0:n)
   complex(real64) csi0
   complex(real64) csi1
   complex(real64) csinh1
-  complex(real64), intent(inout) :: csk(0:n)
+  ! complex(real64), intent(inout) :: csk(0:n)
   integer(int32) k
   integer(int32) m
   ! integer(int32) msta1
@@ -8261,6 +8262,15 @@ subroutine csphik ( n, z, nm, csi, cdi, csk, cdk )
   integer(int32), intent(inout) :: nm
   real(real64) pi
   complex(real64), intent(in) :: z
+
+  ! allocate return array
+  if(allocated(cdi)) deallocate(cdi)
+  if(allocated(cdk)) deallocate(cdk)
+  if(allocated(csi)) deallocate(csi)
+  if(allocated(csk)) deallocate(csk)
+  nm = max(1, n)
+  allocate(cdi(0:nm), cdk(0:nm), csi(0:nm), csk(0:nm))
+  
 
   pi = 3.141592653589793e+00_real64
   a0 = abs ( z )    

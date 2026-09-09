@@ -42,14 +42,14 @@ module ModLapack
   ! Derived type which wraps Lapack subroutines
   type Lapack
 
-    contains
+  contains
 
     !////////////////////////////////////////////////////////////////////////////
     ! matrix decomposition
     !////////////////////////////////////////////////////////////////////////////
     ! LU decomposition of general matrix
     procedure, nopass, private :: dgetrf_, zgetrf_
-    generic, public :: getrf => dgetrf_, zgetrf_ 
+    generic, public :: getrf => dgetrf_, zgetrf_
     ! Cholesky decomposition of a positive definite symmetric(hermite) matrix
     procedure, nopass, private :: dpotrf_, zpotrf_
     generic, public :: potrf => dpotrf_, zpotrf_
@@ -108,9 +108,9 @@ module ModLapack
     procedure, nopass, public :: heev => zheev_
 
   end type Lapack
-  
-  contains  
- 
+
+contains
+
   !////////////////////////////////////////////////////////////////////////////
   ! matrix decompositions
   !////////////////////////////////////////////////////////////////////////////
@@ -128,7 +128,7 @@ module ModLapack
     external :: dgetrf
     ! local variables
     integer :: sz,inf
-    
+
     ! body
     dgetrf_ = .false. ! default return value
 
@@ -156,7 +156,7 @@ module ModLapack
     external :: zgetrf
     ! local variables
     integer :: sz, inf
-    
+
     ! body
     zgetrf_ = .false. ! default return value
 
@@ -186,7 +186,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     dpotrf_ = .false. ! default return value
 
@@ -194,7 +194,7 @@ module ModLapack
     if(present(lower)) then
       if(lower) uplo = 'L'  ! lower triangle is decomposed
     end if
-    
+
     sz = size(src,dim=1)
     call dpotrf(uplo,sz,src,sz,inf)
     if(inf/=0) then
@@ -203,9 +203,9 @@ module ModLapack
     end if
     dpotrf_ = .true.
   end function dpotrf_
-    
 
-  
+
+
   !> @brief choresky decomposition for complex valuded
   !>            positive-definite hermite matrix
   !> @return true if successful, false otherwise
@@ -222,7 +222,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     zpotrf_ = .false. ! default return value
 
@@ -344,7 +344,7 @@ module ModLapack
     if(present(lower)) then
       if(lower) uplo = 'L'  ! lower triangle is decomposed
     end if
-   
+
     sz = size(src,dim=1)
     call zhetrf(uplo,sz,src,sz,piv,wk,sz,inf)
 
@@ -378,7 +378,7 @@ module ModLapack
     external :: dgetrs
     ! local variables
     integer :: sz1,sz2,inf
-    
+
     ! body
     dgetrs_ = .false. ! default return value
 
@@ -418,10 +418,10 @@ module ModLapack
     integer, intent(in) :: piv(:)
     character(len=*), intent(in), optional :: trans
     ! external
-    external :: zgetrs    
+    external :: zgetrs
     ! local variables
     integer :: sz1,sz2,inf
-    
+
     ! body
     zgetrs_ = .false. ! default return value
 
@@ -443,8 +443,8 @@ module ModLapack
     end if
     zgetrs_ = .true.
   end function zgetrs_
-  
-  
+
+
   !> @brief Solve linear equation from choresky decomposition of positive-definite
   !>        real-valued symmetric matrix
   !> @return true if successful, false otherwise
@@ -463,7 +463,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     dpotrs_ = .false. ! default return value
 
@@ -501,7 +501,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     zpotrs_ = .false. ! default return value
     uplo = 'U'  ! upper triangle is decomposed (default)
@@ -518,8 +518,8 @@ module ModLapack
     end if
     zpotrs_ = .true.
   end function zpotrs_
-  
-  
+
+
 
   !> @brief Solves lienar equation from Bunch-Kaufman decomposed real valued symmetric matrix
   !> @return true if successful, false otherwise
@@ -536,11 +536,11 @@ module ModLapack
     integer, intent(in) :: piv(:)
     logical, intent(in), optional :: lower
     ! external
-    external :: dsytrs    
+    external :: dsytrs
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     dsytrs_ = .false. ! default return value
 
@@ -579,7 +579,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     zsytrs_ = .false. ! default return value
 
@@ -614,11 +614,11 @@ module ModLapack
     integer, intent(in) :: piv(:)
     logical, intent(in), optional :: lower
     ! external
-    external :: zhetrs    
+    external :: zhetrs
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo
-    
+
     ! body
     zhetrs_ = .false. ! default return value
 
@@ -637,12 +637,12 @@ module ModLapack
     zhetrs_ = .true.
   end function zhetrs_
 
-  
-  
+
+
   !////////////////////////////////////////////////////////////////////////////
   ! matrix inversions
   !////////////////////////////////////////////////////////////////////////////
-  
+
   !> @brief Calculates inverse matrix of real valued general matrix from LU decomposed matrix
   !> @return true if successful, false otherwise
   !> @param src LU decomposed matrix
@@ -658,12 +658,12 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     real(real64) :: wk(size(src,dim=1))
-    
+
     ! body
     dgetri_ = .false. ! default return value
 
     sz = size(src,dim=1)
-    call dgetri(sz,src,sz,piv,wk,sz,inf)    
+    call dgetri(sz,src,sz,piv,wk,sz,inf)
 
     if(inf/=0) then
       write(error_unit,'(A)') text_color(mlpk_error_color,'lapack%dgetri_:')//' error in dgetri'
@@ -684,16 +684,16 @@ module ModLapack
     ! arguments
     integer, intent(in) :: piv(:)
     ! external
-    external :: zgetri    
+    external :: zgetri
     ! local variables
     integer :: sz,inf
     complex(real64) :: wk(size(src,dim=1))
-    
+
     ! body
     zgetri_ = .false. ! default return value
 
     sz = size(src,dim=1)
-    call zgetri(sz,src,sz,piv,wk,sz,inf)    
+    call zgetri(sz,src,sz,piv,wk,sz,inf)
 
     if(inf/=0) then
       write(error_unit,'(A)') text_color(mlpk_error_color,'lapack%zgetri_:')//' error in zgetri'
@@ -703,7 +703,7 @@ module ModLapack
   end function zgetri_
 
 
-  !> @brief Calculates inverse matrix of real valued positive definite symmetric matrix 
+  !> @brief Calculates inverse matrix of real valued positive definite symmetric matrix
   !>        from choresky decomposed matrix
   !> @return true if successful, false otherwise
   !> @param src Cholesky decomposed matrix
@@ -713,13 +713,13 @@ module ModLapack
     ! returns
     real(real64), intent(inout) :: src(:,:)
     ! arguments
-    logical, intent(in), optional :: lower    
+    logical, intent(in), optional :: lower
     ! external
-    external :: dpotri    
+    external :: dpotri
     ! local variables
     integer :: sz,i,j,inf
     character(len=1) :: uplo
-    
+
     ! body
     dpotri_ = .false. ! default return value
 
@@ -768,11 +768,11 @@ module ModLapack
     ! arguments
     logical, intent(in), optional :: lower
     ! external
-    external :: zpotri    
+    external :: zpotri
     ! local variables
     integer :: sz,i,j,inf
     character(len=1) :: uplo
-    
+
     ! body
     zpotri_ = .false. ! default return value
 
@@ -807,7 +807,7 @@ module ModLapack
     zpotri_ = .true.
   end function zpotri_
 
-  
+
   !> @brief Calculates inverse matrix of real vlaued symmetric matrix by Bunch-Kaufman decomposition
   !> @return true if successful, false otherwise
   !> @param src input matrix
@@ -821,12 +821,12 @@ module ModLapack
     integer, intent(in) :: piv(:)
     logical, intent(in), optional :: lower
     ! external
-    external :: dsytri    
+    external :: dsytri
     ! local variables
     integer :: sz,inf
     real(real64) :: wk(2*size(src,dim=1))
     character(len=1) :: uplo
-    
+
     ! body
     dsytri_ = .false. ! default return value
 
@@ -846,7 +846,7 @@ module ModLapack
   end function dsytri_
 
 
-  !> @brief Calculate inverse matrix of complex vlaued symmetric matrix 
+  !> @brief Calculate inverse matrix of complex vlaued symmetric matrix
   !>        by Bunch-Kaufman decomposition
   !> @return true if successful, false otherwise
   !> @param src input matrix
@@ -860,12 +860,12 @@ module ModLapack
     integer, intent(in) :: piv(:)
     logical, intent(in), optional :: lower
     ! external
-    external :: zsytri    
+    external :: zsytri
     ! local variables
     integer :: sz,inf
     complex(real64) :: wk(2*size(src,dim=1))
     character(len=1) :: uplo
-    
+
     ! body
     zsytri_ = .false. ! default return value
 
@@ -900,12 +900,12 @@ module ModLapack
     integer, intent(in) :: piv(:)
     logical, intent(in), optional :: lower
     ! external
-    external :: zhetri    
+    external :: zhetri
     ! local variables
     integer :: sz,inf
     complex(real64) :: wk(2*size(src,dim=1))
     character(len=1) :: uplo
-    
+
     ! body
     zhetri_ = .false. ! default return value
 
@@ -942,7 +942,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo,diag
-    
+
 
     ! body
     dtrtri_ = .false. ! default return value
@@ -984,7 +984,7 @@ module ModLapack
     ! local variables
     integer :: sz,inf
     character(len=1) :: uplo,diag
-    
+
 
     ! body
     ztrtri_ = .false. ! default return value
@@ -1011,11 +1011,11 @@ module ModLapack
 
 
 
-  
+
   !////////////////////////////////////////////////////////////////////////////
   ! determinants
   !////////////////////////////////////////////////////////////////////////////
-  
+
   !> @brief Calculates determinant of real valued general matrix by LU decomposition
   !> @return determinant
   !> @param src input matrix
@@ -1070,7 +1070,7 @@ module ModLapack
     real(real64), intent(in) :: src(:,:)
     ! local variables
     integer :: sz,i
-    
+
     ! body
     sz = size(src,dim=1)
     dpotrd_ = 1.0_real64
@@ -1091,7 +1091,7 @@ module ModLapack
     complex(real64), intent(in) :: src(:,:)
     ! local variables
     integer :: sz,i
-    
+
     ! body
     sz = size(src,dim=1)
     zpotrd_ = 1.0_real64
@@ -1100,8 +1100,8 @@ module ModLapack
     end do
     zpotrd_ = zpotrd_*zpotrd_
   end function zpotrd_
-  
-  
+
+
 
   !////////////////////////////////////////////////////////////////////////////
   ! eigenvalue problem
@@ -1127,14 +1127,12 @@ module ModLapack
     integer :: sz,lwk,inf
     real(real64) :: wk(max(3*size(a,dim=1)-1,1))
     character(len=1) :: uplo
-    
+
     ! body
     dsyev_ = .false. ! default return value
-
+    uplo = 'U'
     if(present(lower)) then
       if(lower) uplo = 'L'  ! lower triangle is decomposed
-    else
-      uplo = 'U'  ! upper triangle is decomposed (default)
     end if
 
     sz = size(a,dim=1)
@@ -1170,14 +1168,13 @@ module ModLapack
     real(real64) :: rwk(max(1,3*size(a,dim=1)-2))
     complex(real64) :: wk(max(1,2*size(a,dim=1)-1))
     character(len=1) :: uplo
-    
+
     ! body
     zheev_ = .false. ! default return value
 
+    uplo = 'U'  ! default to upper triangle decomposition
     if(present(lower)) then
       if(lower) uplo = 'L'  ! lower triangle is decomposed
-    else
-      uplo = 'U'  ! upper triangle is decomposed (default)
     end if
 
     sz = size(a,dim=1)

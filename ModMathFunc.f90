@@ -2,7 +2,7 @@
 !> @brief Module for mathematical functions
 !> @author Masaaki Kimura
 module ModMathFunc
-  use iso_fortran_env, only: real64, real128, error_unit
+  use iso_fortran_env, only: real64, error_unit
   use ModNuclConst, only: PI, VDIM, VX, VY, VZ, SDIM, SU, SD, I_IMAG
   implicit none
   private
@@ -17,8 +17,7 @@ module ModMathFunc
 
     !>!> gamma function  !>!>
     procedure, nopass, private :: dgamln_  ! real(real64) version
-    procedure, nopass, private :: qgamln_  ! real(real128) version
-    generic, public :: gamln => dgamln_, qgamln_
+    generic, public :: gamln => dgamln_
 
     !>!> associated legendre function !>!>
     procedure, nopass, private :: dplgndr_  ! real(real64) version
@@ -29,6 +28,15 @@ module ModMathFunc
     procedure, nopass, public :: sph_harm
     ! Shperical Harmonics from real/complex valued 3D vector
     generic, public :: sph_harm_vector => dsph_harm_, zsph_harm_
+    ! Solid harmonics r^l * Y_lm(r_hat) from real/complex valued 3D vector.
+    ! Unlike sph_harm_vector these are polynomials, hence single valued for a
+    ! complex vector; sph_harm_vector flips the sign of an odd |m| component when
+    ! the branches of its two square roots disagree. Always use solid_harm_vector
+    ! for a complex vector.
+    generic, public :: solid_harm_vector => dsolid_harm_, zsolid_harm_
+    procedure, nopass, private :: dsolid_harm_ ! real-valued 3D vector
+    procedure, nopass, private :: zsolid_harm_ ! complex-valued 3D vector
+    procedure, nopass, private :: zlegendre_homog_ ! homogenized Legendre derivative
     procedure, nopass, private :: dsph_harm_ ! real-valued 3D vector
     procedure, nopass, private :: zsph_harm_ ! complex-valued 3D vector
 
@@ -80,53 +88,6 @@ module ModMathFunc
   end function dgamln_
   
   
-  !> @brief returns logarithm of gamma function in quadratic precision
-  !> @returns logarithm of gamma function in quadratic precision
-  !> @param x argument for gamma function
-  pure elemental real(real128) function qgamln_(x)
-    implicit none
-    ! arguments 
-    real(real128), intent(in) :: x
-    ! constants
-    real(real128), parameter :: pv= 1.357812200070394647397691360527351888e01_real128
-    real(real128), parameter :: pr= 3.1782384299734898421289539143998119380e-06_real128
-    real(real128), parameter :: p0= 3.1482070283349300354582623623908339457e-04_real128
-    real(real128), parameter :: p1= 1.2793741608722984500693458490473661860e-02_real128
-    real(real128), parameter :: p2= 2.7874830306029980874434569055259616606e-01_real128
-    real(real128), parameter :: p3= 3.5748763958228570180758258557929027134e+00_real128
-    real(real128), parameter :: p4= 2.7927280421563325015666935178375281217e+01_real128
-    real(real128), parameter :: p5= 1.3321384650379738989446885832268784755e+02_real128
-    real(real128), parameter :: p6= 3.7950405192465422312792634449147935784e+02_real128
-    real(real128), parameter :: p7= 6.1562149993028259463346808196235292341e+02_real128
-    real(real128), parameter :: p8= 5.2400400869100650701118261358974985117e+02_real128
-    real(real128), parameter :: p9= 2.0418766202023711876168179075996496480e+02_real128
-    real(real128), parameter :: p10= 2.8645619772729108683191342647193554200e+01_real128
-    real(real128), parameter :: p11= 8.9507210141338984737305834751291040398e-01_real128
-    real(real128), parameter :: p12= 1.8410863315761265630602733481713520754e-03_real128
-    real(real128), parameter :: q1= 9.9999999999999999999999999982917706744e-01_real128
-    real(real128), parameter :: q2= 2.0000000000000000000000014372532510977e+00_real128
-    real(real128), parameter :: q3= 2.9999999999999999999987806987019196983e+00_real128
-    real(real128), parameter :: q4= 4.0000000000000000003182289605630538899e+00_real128
-    real(real128), parameter :: q5= 4.9999999999999999603276569479688692879e+00_real128
-    real(real128), parameter :: q6= 6.0000000000000030034309156698097129604e+00_real128
-    real(real128), parameter :: q7= 6.9999999999998375247462698288225315906e+00_real128
-    real(real128), parameter :: q8= 8.0000000000071915518803021765161684809e+00_real128
-    real(real128), parameter :: q9= 8.9999999997000681861822653951282600849e+00_real128
-    real(real128), parameter :: q10= 1.0000000014205005237309132429530491661e+01_real128
-    real(real128), parameter :: q11= 1.0999998953920119680361242478373085334e+01_real128
-    real(real128), parameter :: q12= 1.2000238108934194337280539725944422661e+01_real128
-    ! local variables
-    real(real128) :: w,y 
-
-    ! body
-    w=x
-    if(x.lt.0) w=1-x
-    y=log(((((((((((((p12/(w+q12)+p11)/(w+q11)+p10)/(w+q10)+p9)/(w+q9)+p8)/(w+q8)+p7)/ &
-      & (w+q7)+p6)/(w+q6)+p5)/(w+q5)+p4)/(w+q4)+p3)/(w+q3)+p2)/(w+q2)+p1)/(w+q1)+p0)/  &
-      &  w+pr)+(w-0.5_real128)*log(w+pv)-w
-    if(x.lt.0) y=log(pi/sin(pi*x))-y
-    qgamln_=y
-  end function qgamln_
   
   !> @brief real(real64) version of the Legendre polynominals\
   !> @note l and m are not doubled as in wigner's D function and clebsch-gordan coefficient
@@ -247,7 +208,13 @@ module ModMathFunc
     am = abs(m)
     x = cos(theta)
     e = exp(cmplx(0.0_real64,am*phi,kind=real64))
-    cnst = sqrt((2*l+1)/(4*PI)*exp(dble(qgamln_(l-am+1.0_real128)-qgamln_(l+am+1.0_real128))))
+    ! (l-|m|)!/(l+|m|)! is the reciprocal of a product of 2|m| integers; evaluating it
+    ! directly is exact to the round-off and faster than a call to the gamma function
+    cnst = 1.0_real64
+    do i=l-am+1, l+am
+      cnst = cnst/i
+    end do
+    cnst = sqrt((2*l+1)/(4*PI)*cnst)
     
     pmm = 1.0_real64
     if ( am > 0) then
@@ -293,6 +260,7 @@ module ModMathFunc
     integer, intent(in) :: m ! magnetic substitute
     real(real64), intent(in) :: r(VDIM) ! real-valued three dimensional vector
     ! internal variables
+    integer :: i
     real(real64) :: rr, costheta, cnst
     complex(real64) :: xpy, xmy
 
@@ -320,7 +288,13 @@ module ModMathFunc
       xmy = (r(VX) - I_IMAG*r(VY))/sqrt(r(VX)*r(VX) + r(VY)*r(VY)) ! exp(-i\phi)
     end if
     ! compute normalization factor
-    cnst = sqrt((2*l+1)/(4*PI)*exp(dble(qgamln_(l-abs(m)+1.0_real128)-qgamln_(l+abs(m)+1.0_real128))))
+    ! (l-|m|)!/(l+|m|)! is the reciprocal of a product of 2|m| integers; evaluating it
+    ! directly is exact to the round-off and faster than a call to the gamma function
+    cnst = 1.0_real64
+    do i=l-abs(m)+1, l+abs(m)
+      cnst = cnst/i
+    end do
+    cnst = sqrt((2*l+1)/(4*PI)*cnst)
     if (m >= 0) then
       dsph_harm_ = cnst*dplgndr_(l,abs(m),costheta)*xpy**abs(m)
     else
@@ -342,6 +316,7 @@ module ModMathFunc
     integer, intent(in) :: m ! magnetic substitute
     complex(real64), intent(in) :: z(VDIM) ! complex valued three dimensional vector
     ! internal variables
+    integer :: i
     real(real64) :: cnst
     complex(real64) :: r, costheta, xpy, xmy
 
@@ -369,7 +344,13 @@ module ModMathFunc
       xmy = (z(VX) - I_IMAG*z(VY))/sqrt(z(VX)*z(VX) + z(VY)*z(VY)) ! this corresponds to exp(-i\phi)
     end if
     ! compute normalization factor
-    cnst = sqrt((2*l+1)/(4*PI)*exp(dble(qgamln_(l-abs(m)+1.0_real128)-qgamln_(l+abs(m)+1.0_real128))))
+    ! (l-|m|)!/(l+|m|)! is the reciprocal of a product of 2|m| integers; evaluating it
+    ! directly is exact to the round-off and faster than a call to the gamma function
+    cnst = 1.0_real64
+    do i=l-abs(m)+1, l+abs(m)
+      cnst = cnst/i
+    end do
+    cnst = sqrt((2*l+1)/(4*PI)*cnst)
     if (m >= 0) then
       zsph_harm_ = cnst*zplgndr_(l,abs(m),costheta)*xpy**abs(m)
     else
@@ -377,6 +358,130 @@ module ModMathFunc
     end if
 
   end function zsph_harm_
+
+
+  !> @brief solid harmonic r^l * Y_lm(r_hat) of a real valued 3D vector
+  !> @returns r^l * Y_lm(r_hat) with the Condon-Shortley phase
+  !> @param l orbital angular momentum
+  !> @param m magnetic substitute
+  !> @param r real valued three dimensional vector
+  pure complex(real64) function dsolid_harm_(l, m, r)
+    implicit none
+    ! arguments
+    integer, intent(in) :: l
+    integer, intent(in) :: m
+    real(real64), intent(in) :: r(VDIM)
+
+    ! body
+    dsolid_harm_ = zsolid_harm_(l, m, cmplx(r, 0.0_real64, kind=real64))
+
+  end function dsolid_harm_
+
+
+  !> @brief solid harmonic z^l * Y_lm(z_hat) of a complex valued 3D vector
+  !>
+  !> This is a homogeneous polynomial of degree l in the Cartesian components of z, so it
+  !> is single valued for a complex vector. The naive expression of zsph_harm_ evaluates
+  !> sqrt(1-cos^2(theta)) and sqrt(z_x^2+z_y^2) separately; for an even |m| they appear
+  !> squared and the branch is irrelevant, but for an odd |m| the two branches may disagree
+  !> and flip the sign. For a real vector both roots are positive reals and the problem
+  !> does not arise.
+  !>
+  !> @returns z^l * Y_lm(z_hat) with the Condon-Shortley phase
+  !> @param l orbital angular momentum
+  !> @param m magnetic substitute
+  !> @param z complex valued three dimensional vector
+  pure complex(real64) function zsolid_harm_(l, m, z)
+    implicit none
+    ! arguments
+    integer, intent(in) :: l
+    integer, intent(in) :: m
+    complex(real64), intent(in) :: z(VDIM)
+    ! internal variables
+    integer :: i, am
+    real(real64) :: cnst
+    complex(real64) :: ss
+
+    ! body
+    ! Y00 is a constant for any vector
+    if(l == 0) then
+      zsolid_harm_ = 1.0_real64/sqrt(4*PI)
+      return
+    end if
+
+    ! normalization constant. (l-|m|)!/(l+|m|)! is the reciprocal of a product of 2|m| integers
+    am = abs(m)
+    cnst = 1.0_real64
+    do i=l-am+1, l+am
+      cnst = cnst/i
+    end do
+    cnst = sqrt((2*l+1)/(4*PI)*cnst)
+
+    ss = sum(z(:)*z(:)) ! z.z (analytic bilinear product), NOT the squared modulus
+
+    if(m >= 0) then
+      zsolid_harm_ = (1-2*mod(am,2))*cnst*zlegendre_homog_(l,am,z(VZ),ss) &
+        & *(z(VX) + I_IMAG*z(VY))**am
+    else
+      zsolid_harm_ = cnst*zlegendre_homog_(l,am,z(VZ),ss)*(z(VX) - I_IMAG*z(VY))**am
+    end if
+
+  end function zsolid_harm_
+
+
+  !> @brief homogenized derivative of the Legendre polynomial,
+  !>        C_l^m(z,s) = s^{(l-m)/2} [d^m P_l(w)/dw^m]_{w=z/sqrt(s)}
+  !>
+  !> It is a polynomial in z and s, built by the recurrence
+  !>   C_m^m = (2m-1)!!,  C_{m+1}^m = (2m+1)!! z,
+  !>   (l-m) C_l^m = (2l-1) z C_{l-1}^m - (l+m-1) s C_{l-2}^m
+  !>
+  !> @returns C_l^m(z,s)
+  !> @param l degree
+  !> @param m order; must satisfy 0 <= m <= l
+  !> @param z first argument (the z component of the vector)
+  !> @param s second argument (the bilinear square of the vector)
+  pure complex(real64) function zlegendre_homog_(l, m, z, s)
+    implicit none
+    ! arguments
+    integer, intent(in) :: l
+    integer, intent(in) :: m
+    complex(real64), intent(in) :: z
+    complex(real64), intent(in) :: s
+    ! internal variables
+    integer :: k, ll
+    real(real64) :: dfact
+    complex(real64) :: cmm, cmm1, cll
+
+    ! body
+    ! C_m^m = (2m-1)!!
+    dfact = 1.0_real64
+    do k=1, 2*m-1, 2
+      dfact = dfact*k
+    end do
+    cmm = dfact
+    if(l == m) then
+      zlegendre_homog_ = cmm
+      return
+    end if
+
+    ! C_{m+1}^m = (2m+1)!! z
+    cmm1 = (2*m+1)*dfact*z
+    if(l == m+1) then
+      zlegendre_homog_ = cmm1
+      return
+    end if
+
+    cll = cmm1 ! to suppress compiler warning
+    do ll=m+2, l
+      cll = ((2*ll-1)*z*cmm1 - (ll+m-1)*s*cmm)/(ll-m)
+      cmm = cmm1
+      cmm1 = cll
+    end do
+    zlegendre_homog_ = cll
+
+  end function zlegendre_homog_
+
 
   
   
@@ -415,10 +520,11 @@ module ModMathFunc
     gsz = size(gam)
     allocate(dwigner_d_(asz,bsz,gsz),db(bsz))
     
-    ! calculate ln(factorial), fct(n) = ln( (n-1)! )
-    fct(:) = 0.0_real128
+    ! calculate ln(factorial), fct(n) = ln( (n-1)! ).
+    ! the recurrence is exact to the round-off, unlike the Lanczos approximation
+    fct(:) = 0.0_real64
     do k=3, size(fct(:))
-      fct(k) = dble(qgamln_(k+0.0_real128))
+      fct(k) = fct(k-1) + log(k-1.0_real64)
     end do
 
     ! calculate exp(-im1*alp) and exp(-im2*gam)
@@ -438,7 +544,7 @@ module ModMathFunc
     end do
     
     ! makeup small d function
-    db(:) = 0.0_real128
+    db(:) = 0.0_real64
     do step=1,bsz
       cb =  cos(real(bet(step),kind=real64)/2)
       sb = -sin(real(bet(step),kind=real64)/2)

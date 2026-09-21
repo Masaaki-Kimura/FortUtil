@@ -306,13 +306,13 @@ module ModMathFunc
     ! compute the 'length' of real-valued 3D vector r
     rr = sqrt(dot_product(r(:),r(:)))
     ! if the length is zero, return zero for l/=0 cases
-    if (rr == 0.0_real64) then
+    if (.not. (rr > 0.0_real64)) then
       dsph_harm_ = 0.0_real64
       return
     end if
 
     costheta = r(VZ)/rr ! cos(theta) 
-    if(r(VX)*r(VX) + r(VY)*r(VY) == 0.0_real64) then
+    if(.not. (r(VX)*r(VX) + r(VY)*r(VY) > 0.0_real64)) then
       xpy = 1.0_real64 ! Y function does not depend on phi if r*sin(theta) == 0.0d0
       xmy = 1.0_real64
     else
@@ -355,13 +355,13 @@ module ModMathFunc
     ! compute the 'length' of complex-valued 3D vector z
     r = sqrt(sum(z(:)*z(:))) ! this is sqrt of z.z (NOT z*.z)
     ! if the length is zero, return zero.
-    if (r == 0.0_real64) then
+    if (.not. (abs(real(r,real64)) + abs(aimag(r)) > 0.0_real64)) then
       zsph_harm_ = 0.0_real64
       return
     end if
 
     costheta = z(VZ)/r ! this corresponds to cos(theta) for the real vector case
-    if(z(VX)*z(VX) + z(VY)*z(VY) == 0.0_real64) then
+    if(.not. (abs(real(z(VX)*z(VX) + z(VY)*z(VY),real64)) + abs(aimag(z(VX)*z(VX) + z(VY)*z(VY))) > 0.0_real64)) then
       xpy = 1.0_real64 ! Y function does not depend on phi if r*sin(theta) == 0.0d0
       xmy = 1.0_real64
     else

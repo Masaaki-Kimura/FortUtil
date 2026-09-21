@@ -450,9 +450,9 @@ module ModMathFunc
     end do
     
     ! makeup D function
-    forall(ia=1:asz,ib=1:bsz,ig=1:gsz)
+    do concurrent (ia=1:asz, ib=1:bsz, ig=1:gsz)
       dwigner_d_(ia,ib,ig) = ea(ia)*eg(ig)*db(ib)
-    end forall
+    end do
 
   end function dwigner_d_
 

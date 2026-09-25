@@ -459,6 +459,11 @@ module ModMathFunc
 
   !>
   !> @returns 3x3 rotation matrix for 3D vector in Cartesian coordinate in real(real64) precision
+  !> @note The matrix returned is the TRANSPOSE of the active rotation
+  !>       R = Rz(alp) Ry(bet) Rz(gam), i.e. the passive rotation (rotation of the axes).
+  !>       To rotate a vector v actively, use matmul(transpose(rot_cart(alp,bet,gam)), v).
+  !>       rot_spin returns the active D(R) of the same R, so transpose(rot_cart) and rot_spin
+  !>       rotate positions and spinors consistently: U^dag sigma_i U = sum_j R_ij sigma_j, U = rot_spin.
   !> @param alp alpha of Euler angles
   !> @param bet beta of Euler angles
   !> @param gam gamma of Euler angles
@@ -493,6 +498,8 @@ module ModMathFunc
 
   !> @returns 2x2 rotation matrix for 1/2 spinor in complex(real64) precision\
   !> @note the order of rows and columns are inverted from wigner_d (first row and column corresponds to spin up)
+  !> @note The matrix returned is the active D^{1/2}(R) = exp(-i alp Sz) exp(-i bet Sy) exp(-i gam Sz),
+  !>       not transposed.  The Cartesian counterpart is transpose(rot_cart(alp,bet,gam)).
   !> @param alp alpha of Euler angles
   !> @param bet beta of Euler angles
   !> @param gam gamma of Euler angles
@@ -524,7 +531,8 @@ module ModMathFunc
   !>
   !> @brief calculate Euler angles from rotation matrix for 3D vector in Cartesian representation
   !> @returns Euler angles alp, bet, gam corresponding to the given rotation matrix
-  !> @param rot rotation matrix in Cartesian representation
+  !> @param rot rotation matrix in Cartesian representation, in the convention of rot_cart
+  !>            (the transpose of the active rotation); it inverts rot_cart
   subroutine euler_from_rot_cart(alp,bet,gam,rot)
     use, intrinsic :: ieee_arithmetic
     implicit none

@@ -25,6 +25,8 @@
 !> eigenvalue problem
 !> - syev: eigenvalue problem for real valued matrix
 !> - heev: eigenvalue problem for complex valued matrix
+!> matrix product (BLAS)
+!> - gemm: general matrix product c = alpha op(a) op(b) + beta c (real, complex)
 
 
 module ModLapack
@@ -106,6 +108,13 @@ module ModLapack
     procedure, nopass, public :: syev => dsyev_
     ! eigenvalue problem for complex valued matrix
     procedure, nopass, public :: heev => zheev_
+
+    !////////////////////////////////////////////////////////////////////////////
+    ! matrix product (BLAS)
+    !////////////////////////////////////////////////////////////////////////////
+    ! general matrix product c = alpha op(a) op(b) + beta c
+    procedure, nopass, private :: dgemm_, zgemm_
+    generic, public :: gemm => dgemm_, zgemm_
 
   end type Lapack
 
@@ -1187,6 +1196,120 @@ contains
     end if
     zheev_ = .true.
   end function zheev_
+
+
+  !////////////////////////////////////////////////////////////////////////////
+  ! matrix product (BLAS)
+  !////////////////////////////////////////////////////////////////////////////
+
+  !> @brief general matrix product c = alpha op(a) op(b) + beta c of real
+  !>        valued matrices, op(x) = x for 'N' and x^T for 'T' or 'C'
+  !> @return true if successful, false if a trans is not 'N', 'T' or 'C'
+  !>         (either case) or the shapes do not agree
+  !> @param transa, transb op of a and of b
+  !> @param alpha, beta scalar factors
+  !> @param a, b input matrices
+  !> @param c output matrix; with beta = 0 its input is not used
+  !> @notes m, n and k are taken from the shapes. The matrices are contiguous,
+  !>        so that BLAS gets them without a copy: pass a section of whole
+  !>        columns, a(:,1:k), to use part of an array.
+  logical function dgemm_(transa,transb,alpha,a,b,beta,c)
+    implicit none
+    ! returns
+    real(real64), intent(inout), contiguous :: c(:,:)
+    ! arguments
+    character, intent(in) :: transa,transb
+    real(real64), intent(in) :: alpha,beta
+    real(real64), intent(in), contiguous :: a(:,:),b(:,:)
+    ! external
+    external :: dgemm
+    ! local variables
+    integer :: m,n,k
+
+    ! body
+    dgemm_ = .false. ! default return value
+
+    if(.not. gemm_dims_(transa,transb,shape(a),shape(b),shape(c),m,n,k)) then
+      write(error_unit,'(A)') text_color(mlpk_error_color,'lapack%dgemm_:')//' bad trans, or shapes that do not agree'
+      return
+    end if
+    call dgemm(transa,transb,m,n,k,alpha,a,max(1,size(a,dim=1)),b,max(1,size(b,dim=1)),beta,c,max(1,m))
+    dgemm_ = .true.
+  end function dgemm_
+
+
+  !> @brief general matrix product c = alpha op(a) op(b) + beta c of complex
+  !>        valued matrices, op(x) = x, x^T or x^H for 'N', 'T' or 'C'
+  !> @return true if successful, false if a trans is not 'N', 'T' or 'C'
+  !>         (either case) or the shapes do not agree
+  !> @param transa, transb op of a and of b
+  !> @param alpha, beta scalar factors
+  !> @param a, b input matrices
+  !> @param c output matrix; with beta = 0 its input is not used
+  !> @notes as dgemm_
+  logical function zgemm_(transa,transb,alpha,a,b,beta,c)
+    implicit none
+    ! returns
+    complex(real64), intent(inout), contiguous :: c(:,:)
+    ! arguments
+    character, intent(in) :: transa,transb
+    complex(real64), intent(in) :: alpha,beta
+    complex(real64), intent(in), contiguous :: a(:,:),b(:,:)
+    ! external
+    external :: zgemm
+    ! local variables
+    integer :: m,n,k
+
+    ! body
+    zgemm_ = .false. ! default return value
+
+    if(.not. gemm_dims_(transa,transb,shape(a),shape(b),shape(c),m,n,k)) then
+      write(error_unit,'(A)') text_color(mlpk_error_color,'lapack%zgemm_:')//' bad trans, or shapes that do not agree'
+      return
+    end if
+    call zgemm(transa,transb,m,n,k,alpha,a,max(1,size(a,dim=1)),b,max(1,size(b,dim=1)),beta,c,max(1,m))
+    zgemm_ = .true.
+  end function zgemm_
+
+
+  !> @brief m, n and k of c(m,n) = op(a)(m,k) op(b)(k,n) from the shapes
+  !> @return true if both trans are 'N', 'T' or 'C' (either case) and the
+  !>         shapes agree
+  !> @param transa, transb op of a and of b
+  !> @param sa, sb, sc shapes of a, b and c
+  !> @param m, n, k the dimensions of the product
+  logical function gemm_dims_(transa,transb,sa,sb,sc,m,n,k)
+    implicit none
+    ! arguments
+    character, intent(in) :: transa,transb
+    integer, intent(in) :: sa(2),sb(2),sc(2)
+    integer, intent(out) :: m,n,k
+    ! local variables
+    integer :: ma,kb,nb
+
+    ! body
+    gemm_dims_ = .false. ! default return value
+
+    m = sc(1)
+    n = sc(2)
+    k = 0
+    if(index('NnTtCc',transa)==0 .or. index('NnTtCc',transb)==0) return
+    if(transa=='N' .or. transa=='n') then
+      ma = sa(1)
+      k = sa(2)
+    else
+      ma = sa(2)
+      k = sa(1)
+    end if
+    if(transb=='N' .or. transb=='n') then
+      kb = sb(1)
+      nb = sb(2)
+    else
+      kb = sb(2)
+      nb = sb(1)
+    end if
+    gemm_dims_ = ma==m .and. nb==n .and. kb==k
+  end function gemm_dims_
 
 end module ModLapack
 

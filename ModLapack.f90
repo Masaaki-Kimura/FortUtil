@@ -1162,6 +1162,12 @@ contains
   !> @param w eigenvalues
   !> @param jobz if 'N', only eigenvalues are calculated
   !> @param lower if true, decomposes lower triangle, otherwise upper triangle
+  !> @note With MKL (seen with 2026.1) zheev can raise the IEEE divide-by-zero
+  !>       flag inside (zsteqr -> dlaq5) on a well-conditioned matrix, and still
+  !>       return correct eigenvalues and vectors. A program built to trap
+  !>       floating-point exceptions (gfortran -ffpe-trap=zero, ifx -fpe0) stops
+  !>       there: link a reference LAPACK for such a build. This wrapper does
+  !>       not mask the exception.
   logical function zheev_(a,w,jobz,lower)
     implicit none
     ! return

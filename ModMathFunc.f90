@@ -533,46 +533,38 @@ module ModMathFunc
   !> @returns Euler angles alp, bet, gam corresponding to the given rotation matrix
   !> @param rot rotation matrix in Cartesian representation, in the convention of rot_cart
   !>            (the transpose of the active rotation); it inverts rot_cart
+  !> @note With R = Rz(alp) Ry(bet) Rz(gam) and rot = R^T: rot(3,3) = cos bet,
+  !>       (rot(3,1), rot(3,2)) = sin bet (cos alp, sin alp) and
+  !>       (rot(1,3), rot(2,3)) = sin bet (-cos gam, sin gam), so the angles come
+  !>       from atan2. At sin bet = 0 (bet = 0 or pi, the z axis kept or turned
+  !>       over) only alp + gam or alp - gam is defined; gam = 0 is taken, and
+  !>       alp comes from rot(1,1) = +-cos alp, rot(1,2) = +-sin alp. The switch
+  !>       is at sin bet = sqrt(epsilon), where either branch gives the matrix
+  !>       back to about that size. (Before 2026-10-05 alp and gam came from
+  !>       atan of ratios, which is 0/0 at sin bet = 0: the angles returned there
+  !>       did not give the matrix back.)
   subroutine euler_from_rot_cart(alp,bet,gam,rot)
-    use, intrinsic :: ieee_arithmetic
     implicit none
     ! returns
     real(real64), intent(out) :: alp,bet,gam
     ! arguments
     real(real64), intent(in) :: rot(VDIM,VDIM)
     ! internal variables
-    real(real64) :: dm
+    real(real64) :: sb
 
     ! body
-
-    ! determine beta
-    dm = rot(3,3)
-    if(abs(dm) > 1.0_real64) then
-      write(error_unit,'(A)') 'euler_from_rotation_cart: invalid value for Rx(3,3)'
-      dm = sign(1.0_real64,dm)
-    end if
-    bet = acos(dm)
-
-    ! determine alpha
-    dm = rot(3,2)/rot(3,1)
-    if(ieee_is_finite(dm)) then
-      alp = atan(dm)
-      if(rot(3,1) < 0.0_real64) alp = alp + PI
-    else 
-      write(error_unit,'(A)') 'euler_from_rotation_cart: invalid value for Rx(3,2)/Rx(3,1)'
-      alp = -PI/2
-      if(rot(3,2) > 0.0_real64) alp = alp + PI
-    end if
-
-    ! determine gamma
-    dm = -rot(2,3)/rot(1,3)
-    if(ieee_is_finite(dm)) then
-      gam = atan(dm)
-      if(rot(1,3) > 0.0_real64) gam = gam + PI
-    else 
-      write(error_unit,'(A)') 'euler_from_rotation_car: invalid value for Rx(3,2)/Rx(3,1)'
-      gam = -PI/2
-      if(rot(2,3) > 0.0_real64) gam = gam + PI
+    sb = hypot(rot(3,1),rot(3,2))
+    bet = atan2(sb,rot(3,3))
+    if(sb > sqrt(epsilon(1.0_real64))) then
+      alp = atan2(rot(3,2),rot(3,1))
+      gam = atan2(rot(2,3),-rot(1,3))
+    else
+      gam = 0.0_real64
+      if(rot(3,3) > 0.0_real64) then
+        alp = atan2(rot(1,2),rot(1,1))
+      else
+        alp = atan2(-rot(1,2),-rot(1,1))
+      end if
     end if
 
   end subroutine euler_from_rot_cart

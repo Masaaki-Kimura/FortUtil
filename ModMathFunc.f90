@@ -34,6 +34,8 @@ module ModMathFunc
 
     ! Wigner's D function
     procedure, nopass :: wigner_d => dwigner_d_
+    ! Wigner's small d matrix of one rank
+    procedure, nopass :: wigner_d_matrix => dwigner_d_matrix_
 
     ! Rotation matrix
     procedure, nopass :: rot_cart  ! calculates rotation matrix in cartesian rep.
@@ -383,7 +385,14 @@ module ModMathFunc
   !>
   !> @brief Wigner's D function\
   !> @note j, m1 and m2 are doubled (j=1 means angular momentum 1/2)
-  !> @returns Wigner's D function D^j_{m1,m2}(alpha,beta,gamma) in complex(real64) precision
+  !> @note The small d function is d^j_{m1,m2}(bet) of wigner_d_matrix, made by
+  !>       Risbo's recursion, which is stable at any j. The explicit sum over k
+  !>       it replaced alternates in sign and lost digits as 4^j: 6e-11 at j = 20,
+  !>       2e-7 at j = 32, 1e-4 at j = 40, and nothing left from j = 52 (d^j_00
+  !>       against the Legendre polynomial at bet = 1.1).
+  !> @returns Wigner's D function D^j_{m1,m2}(alpha,beta,gamma) in complex(real64) precision,
+  !>          exp(-i m1 alp/2) d^j_{m1,m2}(bet) exp(-i m2 gam/2); zero when |m1| or |m2|
+  !>          exceeds j or differs from it by an odd number
   !> @param j rank of the D function
   !> @param m1 first magnetic substitute
   !> @param m2 second magnetic substitute
@@ -402,59 +411,102 @@ module ModMathFunc
     ! return
     complex(real64), allocatable :: dwigner_d_(:,:,:)
     ! internal variables
-    integer :: k,mink,maxk,step,A,B,C,kapp,ia,ig,ib,asz,gsz,bsz
-    real(real64) :: cb,sb,cnst
-    real(real64) :: fct(max((j+m1)/2,(j-m1)/2,(j+m2)/2,(j-m2)/2)+1)
-    real(real64), allocatable :: coff(:), db(:)
+    integer :: ia,ig,ib,asz,gsz,bsz
+    real(real64), allocatable :: dm(:,:,:)
     complex(real64), allocatable :: ea(:), eg(:)
-    
+
     ! body
     ! number of alpha, gamma and beta grids
     asz = size(alp)
     bsz = size(bet)
     gsz = size(gam)
-    allocate(dwigner_d_(asz,bsz,gsz),db(bsz))
-    
-    ! calculate ln(factorial), fct(n) = ln( (n-1)! )
-    fct(:) = 0.0_real128
-    do k=3, size(fct(:))
-      fct(k) = dble(qgamln_(k+0.0_real128))
-    end do
+    allocate(dwigner_d_(asz,bsz,gsz))
+    dwigner_d_(:,:,:) = (0.0_real64,0.0_real64)
+    if(j < 0 .or. abs(m1) > j .or. abs(m2) > j .or. mod(j+m1,2) /= 0 .or. mod(j+m2,2) /= 0) return
 
     ! calculate exp(-im1*alp) and exp(-im2*gam)
     ea = exp(-0.50_real64*m1*alp(:)*I_IMAG)
     eg = exp(-0.50_real64*m2*gam(:)*I_IMAG)
 
-    ! calculate coefficients of small d function
-    A = (j-m1)/2
-    B = (j+m2)/2
-    C = (m1-m2)/2
-    cnst = (fct((j+m1)/2+1) + fct((j-m2)/2+1) + fct(A+1) + fct(B+1))/2
-    mink = max(0,-C)
-    maxk = min(A,B)
-    allocate(coff(0))
-    do k=mink, maxk
-      coff = [coff, ((-1)**k)*exp(cnst-fct(k+1)-fct(k+C+1)-fct(A-k+1)-fct(B-k+1))]
-    end do
-    
-    ! makeup small d function
-    db(:) = 0.0_real128
-    do step=1,bsz
-      cb =  cos(real(bet(step),kind=real64)/2)
-      sb = -sin(real(bet(step),kind=real64)/2)
-      kapp = 1
-      do k=mink,maxk
-        db(step) = db(step) + coff(kapp)*cb**(j-C-2*k)*sb**(C+2*k)
-        kapp = kapp + 1
-      end do
-    end do
-    
+    ! small d function, m = -j/2 ... j/2 at the indices 1 ... j+1
+    dm = dwigner_d_matrix_(j,bet)
+
     ! makeup D function
     do concurrent (ia=1:asz, ib=1:bsz, ig=1:gsz)
-      dwigner_d_(ia,ib,ig) = ea(ia)*eg(ig)*db(ib)
+      dwigner_d_(ia,ib,ig) = ea(ia)*eg(ig)*dm((j+m1)/2+1,(j+m2)/2+1,ib)
     end do
 
   end function dwigner_d_
+
+
+  !>
+  !> @brief Wigner's small d matrix of one rank at several beta\
+  !> @note j is doubled (j=1 means angular momentum 1/2)
+  !> @note Risbo's recursion: d^{J} with J = j' + 1/2 is the stretched coupling of
+  !>       d^{j'} and d^{1/2},
+  !>         d^J_{M'M} = sum_{a,b=+-1/2} C_a(M') C_b(M) d^{j'}_{M'-a,M-b} d^{1/2}_{a,b},
+  !>         C_{+1/2}(M) = sqrt((j'+M+1/2)/(2j'+1)),  C_{-1/2}(M) = sqrt((j'-M+1/2)/(2j'+1)),
+  !>       the Clebsch-Gordan coefficients <j' M-a 1/2 a|J M>, all non-negative, from
+  !>       d^0 = 1 in 2j steps. It combines unitary matrices with weights of one sign,
+  !>       so no digit is lost by cancellation; the cost is about (2/3) (j+1)^3 per beta.
+  !>       d^{1/2} = [[cos(b/2), -sin(b/2)], [sin(b/2), cos(b/2)]] (rows and columns
+  !>       m = +1/2, -1/2), the convention of rot_spin: d^j(bet) = exp(-i bet J_y).
+  !> @returns d(j+1,j+1,size(bet)), d(i,k,ib) = d^{j/2}_{m'm}(bet(ib)) with
+  !>          m' = -j/2 + (i-1) and m = -j/2 + (k-1), in ascending order (rot_spin is
+  !>          in descending order)
+  !> @param j doubled rank of the d function
+  !> @param bet beta of Euler angles
+  pure function dwigner_d_matrix_(j,bet) result(d)
+    implicit none
+    ! arguments
+    integer, intent(in) :: j
+    real(real64), intent(in) :: bet(:)
+    ! return
+    real(real64), allocatable :: d(:,:,:)
+    ! internal variables
+    integer :: ib,k,ip,iq
+    real(real64) :: c,s,h(2,2)
+    real(real64), allocatable :: old(:,:),new(:,:),cp(:),cm(:)
+
+    ! body
+    allocate(d(max(j,0)+1,max(j,0)+1,size(bet)))
+    d(:,:,:) = 0.0_real64
+    if(j < 0) return
+    do ib=1,size(bet)
+      c = cos(0.50_real64*bet(ib))
+      s = sin(0.50_real64*bet(ib))
+      ! d^{1/2}(a,b), a, b = +1/2 (index 1) and -1/2 (index 2)
+      h(1,1) = c
+      h(1,2) = -s
+      h(2,1) = s
+      h(2,2) = c
+      if(allocated(old)) deallocate(old)
+      allocate(old(1,1))
+      old(1,1) = 1.0_real64
+      do k=1,j
+        ! from 2j' = k-1 (old, k x k) to 2J = k (new, (k+1) x (k+1)); the new index
+        ! ip has M' = -k/2 + (ip-1); a = +1/2 reads the old index ip-1, a = -1/2 ip
+        allocate(new(k+1,k+1),cp(k+1),cm(k+1))
+        do ip=1,k+1
+          cp(ip) = sqrt(real(ip-1,real64)/k)
+          cm(ip) = sqrt(real(k+1-ip,real64)/k)
+        end do
+        new(:,:) = 0.0_real64
+        do iq=1,k+1
+          do ip=1,k+1
+            if(ip > 1 .and. iq > 1) new(ip,iq) = new(ip,iq) + cp(ip)*cp(iq)*old(ip-1,iq-1)*h(1,1)
+            if(ip > 1 .and. iq <= k) new(ip,iq) = new(ip,iq) + cp(ip)*cm(iq)*old(ip-1,iq)*h(1,2)
+            if(ip <= k .and. iq > 1) new(ip,iq) = new(ip,iq) + cm(ip)*cp(iq)*old(ip,iq-1)*h(2,1)
+            if(ip <= k .and. iq <= k) new(ip,iq) = new(ip,iq) + cm(ip)*cm(iq)*old(ip,iq)*h(2,2)
+          end do
+        end do
+        call move_alloc(new,old)
+        deallocate(cp,cm)
+      end do
+      d(:,:,ib) = old(:,:)
+    end do
+
+  end function dwigner_d_matrix_
 
 
   !>

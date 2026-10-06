@@ -624,8 +624,12 @@ module ModMathFunc
 
   !>
   !> @brief calculate Clebsch-Gordan coefficients for given l1, l2, l3 and m3\
-  !> @note l1, l2 and l3 are not doubled as in wigner's D function 
-  !> @returns Clebsch-Gordan coefficients cg(m1,m2) := <l1,m1,l2,m2|l3,m3>
+  !> @note l1, l2, l3 and m3 are doubled, as in wigner_d: cg(a1,a2) is the
+  !>       coefficient of the doubled magnetic numbers m1 = -l1 + 2(a1-1) and
+  !>       m2 = -l2 + 2(a2-1). Outside the triangle |l1-l2| <= l3 <= l1+l2 with
+  !>       l1+l2+l3 even, and for |m3| > l3 or m3 of the other parity than l3,
+  !>       every coefficient is zero.
+  !> @returns Clebsch-Gordan coefficients cg(m1,m2) := <l1/2,m1/2,l2/2,m2/2|l3/2,m3/2>
   !> @param l3 angular momentum of the total system
   !> @param m3 magnetic substitute of the total system
   !> @param l1 angular momentum of the first subsystem
@@ -647,6 +651,10 @@ module ModMathFunc
 
     allocate(cg_coeff(l1+1,l2+1)) ! dimension is number of magnetic substitutes
     cg_coeff(:,:) = 0.0_real64
+    ! no coupling: the recursion below would start from a coefficient that is
+    ! zero and normalize what it builds from it
+    if(l3 < abs(l1-l2) .or. l3 > l1+l2 .or. mod(l1+l2+l3,2) /= 0 .or. &
+      & abs(m3) > l3 .or. mod(l3+m3,2) /= 0) return
     jjcnst = l3*(l3+2) - l1*(l1+2) - l2*(l2+2)
     max_a2 = min(l2+1,(l1+l2+m3)/2 + 1)
     min_a2 = max(1,(-l1+l2+m3)/2 + 1)

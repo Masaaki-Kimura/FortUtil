@@ -2,7 +2,7 @@
 !! @brief Module of I/O utilities in Fortran
 !!
 module ModFortIO
-  use iso_fortran_env, only: real64, input_unit, output_unit, error_unit
+  use iso_fortran_env, only: real64, int8, int64, input_unit, output_unit, error_unit
   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   implicit none
   private
@@ -49,6 +49,7 @@ module ModFortIO
   public :: file_basename  !< get basename; file_basename('/foo/bar/sample.tar.gz') -> 'sample.tar'
   public :: file_ext       !< get extension; file_ext('/foo/bar/sample.tar.gz') -> '.gz'
   public :: file_exists    !< return .true. if a file exists; file_exists('/foo/bar/sample.tar.gz')
+  public :: file_crc32     !< CRC-32 of the bytes of a file (as zlib.crc32); file_crc32(fn, crc)
 
   ! return NaN_real64
   public :: ieee_nan       !< return a NaN (not-a-number) with real(real64) type
@@ -712,6 +713,61 @@ module ModFortIO
 
   end function to_real
 
+
+  !> @brief CRC-32 of the bytes of a file (IEEE 802.3, reflected, polynomial
+  !! 0xEDB88320; the value of zlib.crc32 and of the cksum of the zip format)
+  !! @return .true. on success
+  !! @param fn: file name
+  !! @param crc: the checksum, 0 to 2^32 - 1 (in an integer(int64))
+  logical function file_crc32(fn,crc)
+    implicit none
+    ! arguments
+    character(len=*), intent(in) :: fn
+    integer(int64), intent(out) :: crc
+    ! local variables
+    integer(int64), parameter :: POLY = int(z'EDB88320',int64), MASK32 = int(z'FFFFFFFF',int64)
+    integer(int64) :: table(0:255),c
+    integer(int8), allocatable :: bytes(:)
+    integer :: u,ios,i,k
+    integer(int64) :: n
+    ! body
+    file_crc32 = .false.
+    crc = 0
+    inquire(file=fn,size=n,iostat=ios)
+    if(ios /= 0 .or. n < 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'file_crc32:')//' cannot get the size of '//trim(fn)
+      return
+    end if
+    allocate(bytes(n))
+    open(newunit=u,file=fn,status='old',action='read',access='stream',form='unformatted',iostat=ios)
+    if(ios /= 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'file_crc32:')//' cannot open '//trim(fn)
+      return
+    end if
+    if(n > 0) read(u,iostat=ios) bytes
+    close(u)
+    if(ios /= 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'file_crc32:')//' cannot read '//trim(fn)
+      return
+    end if
+    do i=0,255
+      c = int(i,int64)
+      do k=1,8
+        if(iand(c,1_int64) /= 0) then
+          c = ieor(shiftr(c,1),POLY)
+        else
+          c = shiftr(c,1)
+        end if
+      end do
+      table(i) = c
+    end do
+    c = MASK32
+    do i=1,size(bytes)
+      c = ieor(table(int(iand(ieor(c,iand(int(bytes(i),int64),255_int64)),255_int64))),shiftr(c,8))
+    end do
+    crc = ieor(c,MASK32)
+    file_crc32 = .true.
+  end function file_crc32
 
   !!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !! JsonWriter

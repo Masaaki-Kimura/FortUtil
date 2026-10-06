@@ -3,6 +3,7 @@
 !!
 module ModFortIO
   use iso_fortran_env, only: real64, input_unit, output_unit, error_unit
+  use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
   implicit none
   private
 
@@ -33,6 +34,7 @@ module ModFortIO
   !! public class
   !!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   public :: FileHandler    !< class for file I/O
+  public :: JsonWriter     !< class to write a JSON file
 
   !!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   !! public functions/subroutines
@@ -84,6 +86,52 @@ module ModFortIO
 
     final :: delete_filehandler
   end type FileHandler
+
+  !>
+  !> @brief Class to write a JSON file (RFC 8259)\
+  !! logical open(fn,message): create (or replace) the file fn\
+  !! logical close(): end the file and close it; .false. if any write failed or a\
+  !!   nesting was left open (the reason goes to error_unit)\
+  !! begin_object(key), end_object(), begin_array(key), end_array(): the nesting;\
+  !!   the key is given inside an object and not inside an array or at the top\
+  !! value(key,val,digits): integer, real(real64), logical, character and\
+  !!   complex(real64) (as [re, im]); rank-1 integer and real(real64) arrays;\
+  !!   rank-2 real(real64) arrays (a list of their rows); rank-1 and rank-2\
+  !!   complex(real64) arrays as {"re": ..., "im": ...} (rank 2 as lists of rows)\
+  !! digits: (optional) significant digits of a real, 1 to 17 (17: every\
+  !!   real(real64) is read back exactly)\
+  !! A NaN or an infinity, which JSON does not have, is written as null. The\
+  !! file is a formatted stream, so that a line has no length limit.
+  type JsonWriter
+    integer, private :: unit = error_unit
+    logical, private :: opened = .false.
+    logical, private :: ok = .false.
+    integer, private :: depth = 0
+    logical, allocatable, private :: inobj(:)  ! the level is an object (else an array)
+    logical, allocatable, private :: first(:)  ! no item written yet at the level
+    logical, private :: rootdone = .false.     ! the top-level value is written
+
+    contains
+    procedure, public :: open => jsonwriter_open
+    procedure, public :: close => jsonwriter_close
+    procedure, public :: begin_object => jsonwriter_begin_object
+    procedure, public :: end_object => jsonwriter_end_object
+    procedure, public :: begin_array => jsonwriter_begin_array
+    procedure, public :: end_array => jsonwriter_end_array
+    procedure, private :: jsonwriter_value_int, jsonwriter_value_real, jsonwriter_value_logical
+    procedure, private :: jsonwriter_value_string, jsonwriter_value_complex
+    procedure, private :: jsonwriter_value_int1, jsonwriter_value_real1, jsonwriter_value_real2
+    procedure, private :: jsonwriter_value_complex1, jsonwriter_value_complex2
+    generic, public :: value => jsonwriter_value_int, jsonwriter_value_real, jsonwriter_value_logical, &
+      & jsonwriter_value_string, jsonwriter_value_complex, jsonwriter_value_int1, jsonwriter_value_real1, &
+      & jsonwriter_value_real2, jsonwriter_value_complex1, jsonwriter_value_complex2
+    procedure, private :: item => jsonwriter_item
+    procedure, private :: put => jsonwriter_put
+    procedure, private :: push => jsonwriter_push
+    procedure, private :: pop => jsonwriter_pop
+
+    final :: delete_jsonwriter
+  end type JsonWriter
 
   !>
   !> @brief constructor for FileHandler
@@ -663,6 +711,380 @@ module ModFortIO
     read(buf,*) to_real      ! and read from internal buffer
 
   end function to_real
+
+
+  !!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  !! JsonWriter
+  !!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  !> @brief destructor for JsonWriter: close the file if it is open
+  subroutine delete_jsonwriter(this)
+    implicit none
+    type(JsonWriter), intent(inout) :: this
+    integer :: ios
+    if(this%opened) close(this%unit,iostat=ios)
+    this%opened = .false.
+  end subroutine delete_jsonwriter
+
+  !> @brief create (or replace) a JSON file
+  !! @return .true. on success
+  !! @param fn: file name
+  !! @param message: (optional) error message on failure
+  logical function jsonwriter_open(this,fn,message)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in) :: fn
+    character(len=*), intent(in), optional :: message
+    integer :: ios
+    jsonwriter_open = .false.
+    if(this%opened) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter%open:')//' a file is open already.'
+      return
+    end if
+    open(newunit=this%unit,file=fn,status='replace',action='write',access='stream',form='formatted',iostat=ios)
+    if(ios /= 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter%open:')//' cannot create '//trim(fn)
+      if(present(message)) write(error_unit,'(A)') trim(message)
+      this%unit = error_unit
+      return
+    end if
+    this%opened = .true.
+    this%ok = .true.
+    this%depth = 0
+    this%rootdone = .false.
+    if(allocated(this%inobj)) deallocate(this%inobj)
+    if(allocated(this%first)) deallocate(this%first)
+    allocate(this%inobj(0),this%first(0))
+    jsonwriter_open = .true.
+  end function jsonwriter_open
+
+  !> @brief end the file and close it
+  !! @return .true. if every write succeeded and every nesting was closed
+  logical function jsonwriter_close(this)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    integer :: ios
+    jsonwriter_close = .false.
+    if(.not. this%opened) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter%close:')//' no file is open.'
+      return
+    end if
+    if(this%depth /= 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter%close:')//' a nesting is left open.'
+      this%ok = .false.
+    end if
+    if(.not. this%rootdone) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter%close:')//' nothing was written.'
+      this%ok = .false.
+    end if
+    call this%put(new_line('a'))
+    close(this%unit,iostat=ios)
+    if(ios /= 0) this%ok = .false.
+    this%opened = .false.
+    this%unit = error_unit
+    jsonwriter_close = this%ok
+  end function jsonwriter_close
+
+  !> @brief write a string to the file, recording a failure
+  subroutine jsonwriter_put(this,str)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in) :: str
+    integer :: ios
+    if(.not. this%opened) then
+      this%ok = .false.
+      return
+    end if
+    write(this%unit,'(A)',advance='no',iostat=ios) str
+    if(ios /= 0) this%ok = .false.
+  end subroutine jsonwriter_put
+
+  !> @brief start an item: the comma, the new line and indentation, and the key
+  !! (required inside an object, refused elsewhere)
+  subroutine jsonwriter_item(this,key)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    if(this%depth == 0) then
+      if(this%rootdone .or. present(key)) then
+        write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter:')// &
+          & ' one top-level value, without a key.'
+        this%ok = .false.
+      end if
+      this%rootdone = .true.
+      return
+    end if
+    if(this%inobj(this%depth) .neqv. present(key)) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter:')// &
+        & ' a key is needed inside an object and refused inside an array.'
+      this%ok = .false.
+    end if
+    if(.not. this%first(this%depth)) call this%put(',')
+    this%first(this%depth) = .false.
+    call this%put(new_line('a')//repeat('  ',this%depth))
+    if(present(key)) call this%put(json_string(key)//': ')
+  end subroutine jsonwriter_item
+
+  !> @brief open a level of nesting
+  subroutine jsonwriter_push(this,obj)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    logical, intent(in) :: obj
+    this%inobj = [this%inobj,obj]
+    this%first = [this%first,.true.]
+    this%depth = this%depth + 1
+  end subroutine jsonwriter_push
+
+  !> @brief close a level of nesting of the kind given
+  subroutine jsonwriter_pop(this,obj)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    logical, intent(in) :: obj
+    if(this%depth == 0) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter:')//' nothing to end.'
+      this%ok = .false.
+      return
+    end if
+    if(this%inobj(this%depth) .neqv. obj) then
+      write(error_unit,'(A)') text_color(mfio_error_color,'JsonWriter:')//' an object and an array crossed.'
+      this%ok = .false.
+    end if
+    if(.not. this%first(this%depth)) call this%put(new_line('a')//repeat('  ',this%depth-1))
+    this%inobj = this%inobj(1:this%depth-1)
+    this%first = this%first(1:this%depth-1)
+    this%depth = this%depth - 1
+  end subroutine jsonwriter_pop
+
+  !> @brief begin an object
+  !! @param key: (optional) its key, inside an object
+  subroutine jsonwriter_begin_object(this,key)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    call this%item(key)
+    call this%put('{')
+    call this%push(.true.)
+  end subroutine jsonwriter_begin_object
+
+  !> @brief end the object begun last
+  subroutine jsonwriter_end_object(this)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    call this%pop(.true.)
+    call this%put('}')
+  end subroutine jsonwriter_end_object
+
+  !> @brief begin an array
+  !! @param key: (optional) its key, inside an object
+  subroutine jsonwriter_begin_array(this,key)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    call this%item(key)
+    call this%put('[')
+    call this%push(.false.)
+  end subroutine jsonwriter_begin_array
+
+  !> @brief end the array begun last
+  subroutine jsonwriter_end_array(this)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    call this%pop(.false.)
+    call this%put(']')
+  end subroutine jsonwriter_end_array
+
+  subroutine jsonwriter_value_int(this,key,val)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    integer, intent(in) :: val
+    call this%item(key)
+    call this%put(to_string_int(val))
+  end subroutine jsonwriter_value_int
+
+  subroutine jsonwriter_value_real(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    real(real64), intent(in) :: val
+    integer, intent(in), optional :: digits
+    call this%item(key)
+    call this%put(json_real(val,digits))
+  end subroutine jsonwriter_value_real
+
+  subroutine jsonwriter_value_logical(this,key,val)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    logical, intent(in) :: val
+    call this%item(key)
+    if(val) then
+      call this%put('true')
+    else
+      call this%put('false')
+    end if
+  end subroutine jsonwriter_value_logical
+
+  subroutine jsonwriter_value_string(this,key,val)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    character(len=*), intent(in) :: val
+    call this%item(key)
+    call this%put(json_string(val))
+  end subroutine jsonwriter_value_string
+
+  subroutine jsonwriter_value_complex(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    complex(real64), intent(in) :: val
+    integer, intent(in), optional :: digits
+    call this%item(key)
+    call this%put('['//json_real(real(val,real64),digits)//', '//json_real(aimag(val),digits)//']')
+  end subroutine jsonwriter_value_complex
+
+  subroutine jsonwriter_value_int1(this,key,val)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    integer, intent(in) :: val(:)
+    integer :: i
+    call this%item(key)
+    call this%put('[')
+    do i=1,size(val)
+      if(i > 1) call this%put(', ')
+      call this%put(to_string_int(val(i)))
+    end do
+    call this%put(']')
+  end subroutine jsonwriter_value_int1
+
+  subroutine jsonwriter_value_real1(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    real(real64), intent(in) :: val(:)
+    integer, intent(in), optional :: digits
+    call this%item(key)
+    call this%put(json_row(val,digits))
+  end subroutine jsonwriter_value_real1
+
+  subroutine jsonwriter_value_real2(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    real(real64), intent(in) :: val(:,:)
+    integer, intent(in), optional :: digits
+    call this%item(key)
+    call this%put(json_rows(val,digits,this%depth+1))
+  end subroutine jsonwriter_value_real2
+
+  subroutine jsonwriter_value_complex1(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    complex(real64), intent(in) :: val(:)
+    integer, intent(in), optional :: digits
+    call this%item(key)
+    call this%put('{"re": '//json_row(real(val,real64),digits)//', "im": '//json_row(aimag(val),digits)//'}')
+  end subroutine jsonwriter_value_complex1
+
+  subroutine jsonwriter_value_complex2(this,key,val,digits)
+    implicit none
+    class(JsonWriter), intent(inout) :: this
+    character(len=*), intent(in), optional :: key
+    complex(real64), intent(in) :: val(:,:)
+    integer, intent(in), optional :: digits
+    character(:), allocatable :: ind
+    call this%item(key)
+    ind = repeat('  ',this%depth+1)
+    call this%put('{'//new_line('a')//ind//'"re": '//json_rows(real(val,real64),digits,this%depth+2)//','// &
+      & new_line('a')//ind//'"im": '//json_rows(aimag(val),digits,this%depth+2)//new_line('a')// &
+      & repeat('  ',this%depth)//'}')
+  end subroutine jsonwriter_value_complex2
+
+  !> @brief a real(real64) as a JSON number with the significant digits given
+  !! (17 by default), or null for a NaN or an infinity
+  function json_real(x,digits) result(s)
+    implicit none
+    character(:), allocatable :: s
+    real(real64), intent(in) :: x
+    integer, intent(in), optional :: digits
+    integer :: nd,ios
+    character(len=64) :: buf,fm
+    if(.not. ieee_is_finite(x)) then
+      s = 'null'
+      return
+    end if
+    nd = 17
+    if(present(digits)) nd = max(1,min(17,digits))
+    write(fm,'(A,I0,A,I0,A)') '(ES',nd+9,'.',nd-1,'E3)'
+    write(buf,fm,iostat=ios) x
+    if(ios /= 0) then
+      s = 'null'
+      return
+    end if
+    s = trim(adjustl(buf))
+  end function json_real
+
+  !> @brief a rank-1 real(real64) array as one JSON list
+  function json_row(v,digits) result(s)
+    implicit none
+    character(:), allocatable :: s
+    real(real64), intent(in) :: v(:)
+    integer, intent(in), optional :: digits
+    integer :: i
+    s = '['
+    do i=1,size(v)
+      if(i > 1) s = s//', '
+      s = s//json_real(v(i),digits)
+    end do
+    s = s//']'
+  end function json_row
+
+  !> @brief a rank-2 real(real64) array as a list of its rows, one row per line
+  !! indented to the level given
+  function json_rows(m,digits,level) result(s)
+    implicit none
+    character(:), allocatable :: s
+    real(real64), intent(in) :: m(:,:)
+    integer, intent(in), optional :: digits
+    integer, intent(in) :: level
+    integer :: i
+    s = '['
+    do i=1,size(m,1)
+      if(i > 1) s = s//','
+      s = s//new_line('a')//repeat('  ',level)//json_row(m(i,:),digits)
+    end do
+    if(size(m,1) > 0) s = s//new_line('a')//repeat('  ',level-1)
+    s = s//']'
+  end function json_rows
+
+  !> @brief a string as a JSON string: the quotation mark, the backslash and the
+  !! control characters escaped
+  function json_string(str) result(s)
+    implicit none
+    character(:), allocatable :: s
+    character(len=*), intent(in) :: str
+    integer :: i,c
+    character(len=6) :: u
+    s = '"'
+    do i=1,len(str)
+      c = iachar(str(i:i))
+      select case (c)
+      case (34)
+        s = s//achar(92)//'"'
+      case (92)
+        s = s//achar(92)//achar(92)
+      case (0:31)
+        write(u,'(A,Z4.4)') achar(92)//'u',c
+        s = s//u
+      case default
+        s = s//str(i:i)
+      end select
+    end do
+    s = s//'"'
+  end function json_string
 
 
 end module ModFortIO
